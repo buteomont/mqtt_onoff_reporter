@@ -14,7 +14,7 @@
  *  factorydefaults=yes to reset all settings to factory defaults
  *  
  */
-#define VERSION "20.09.24.0"  //remember to update this after every change! YY.MM.DD.REV
+#define VERSION "20.09.24.1"  //remember to update this after every change! YY.MM.DD.REV
  
 #include <PubSubClient.h> 
 #include <ESP8266WiFi.h>
