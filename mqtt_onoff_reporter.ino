@@ -5,7 +5,7 @@
  *  broker=<broker name or address>
  *  port=<port number>   (defaults to 1883)
  *  topicRoot=<topic root> (something like buteomont/water/pressure/ - must end with / and 
- *  "raw", "liters", or "period" will be added)
+ *  "state" or "period" will be added)
  *  user=<mqtt user>
  *  pass=<mqtt password>
  *  ssid=<wifi ssid>
@@ -14,7 +14,7 @@
  *  factorydefaults=yes to reset all settings to factory defaults
  *  
  */
-#define VERSION "20.09.24.1"  //remember to update this after every change! YY.MM.DD.REV
+#define VERSION "20.09.25.2"  //remember to update this after every change! YY.MM.DD.REV
  
 #include <PubSubClient.h> 
 #include <ESP8266WiFi.h>
@@ -42,7 +42,7 @@ boolean finalReportSent=true;
 //sensor stuff
 boolean lastTick=false;
 unsigned long lastPulseTime=0;
-unsigned long pulsePeriod=0; //The number of milliseconds between last two pulses
+unsigned long pulsePeriod=0; //The number of milliseconds between last two changes
 
 typedef struct 
   {
@@ -263,7 +263,6 @@ void showSettings()
   Serial.print(settings.wifiPassword);
   Serial.println(")");
   Serial.println("\"reboot=yes\" to reboot the controller");
-  Serial.println("\"resetPulses=yes\" to reset the pulse counter to zero");
   Serial.println("\n*** Use \"factorydefaults=yes\" to reset all settings ***\n");
   }
 
@@ -335,7 +334,7 @@ void handleTick(boolean tick)
  */
 void tickEvent(long cts)
   {
-  pulsePeriod=cts-lastPulseTime; //This is the time in milliseconds between pulses
+  pulsePeriod=cts-lastPulseTime; //This is the time in milliseconds between changes
   report();
   lastReport=cts;
   }
