@@ -147,8 +147,9 @@ void setup()
     
   Serial.println("\nConfiguration is done via serial connection.  You can enter:\n");
   showSettings(); 
-  lastTick=getTick();  //to keep from reporting after reboot for no reason 
+  lastTick=!getTick();  //to get first report after reboot
   digitalWrite(LED_BUILTIN, HIGH); //turn off the LED
+  delay(1000); //so we'll know it's ready
   }
 
 
@@ -316,13 +317,14 @@ void handleTick(boolean tick)
   long ts=millis();
   if (tick!=lastTick)
     {
-    if (ts-lastPulseTime>DEBOUNCE_DELAY) //it hasn't changed unless it's changed for DEBOUNCE_DELAY ms
+    delay(DEBOUNCE_DELAY);
+    if (tick!=lastTick) //it hasn't changed after settling
       {
       lastTick=tick; // only process one event per tick
       tickEvent(ts);
       lastPulseTime=ts;  //save it for next time
       }
-    digitalWrite(LED_BUILTIN, tick?LOW:HIGH); //HIGH is LED OFF
+    digitalWrite(LED_BUILTIN, tick?HIGH:LOW); //HIGH is LED OFF
     }    
   }
 
@@ -495,7 +497,7 @@ void report()
   //publish the sensor pin state
   strcpy(topic,settings.mqttTopicRoot);
   strcat(topic,MQTT_TOPIC_STATE);
-  sprintf(reading,"%s",lastTick?"ON":"OFF");
+  sprintf(reading,"%s",lastTick?"OFF":"ON"); //pin grounded when heater is on
   success=publish(topic,reading);
   if (!success)
     Serial.println("************ Failed publishing sensor state!");
@@ -558,7 +560,7 @@ boolean saveSettings()
     }
   else
     {
-    Serial.println("Settings deemed incomplete");
+    Serial.println("Settings still incomplete");
     settings.validConfig=0;
     settingsAreValid=false;
     }
