@@ -14,7 +14,7 @@
  *  factorydefaults=yes to reset all settings to factory defaults
  *  
  */
-#define VERSION "20.09.25.2"  //remember to update this after every change! YY.MM.DD.REV
+#define VERSION "20.10.08.1"  //remember to update this after every change! YY.MM.DD.REV
  
 #include <PubSubClient.h> 
 #include <ESP8266WiFi.h>
@@ -74,11 +74,11 @@ void setup()
   Serial.setTimeout(10000);
   Serial.println();
   delay(500);
-  Serial.println("\n***************************************************");
+  Serial.println("\n******************************************************");
   Serial.print("MQTT on/off reporter version ");
   Serial.print(VERSION);
   Serial.println(" starting up...");
-  Serial.println("***************************************************\n");
+  Serial.println("******************************************************\n");
   
   while (!Serial) 
     {
@@ -109,6 +109,7 @@ void setup()
     Serial.print(settings.ssid);
     Serial.println("\"");
     
+    WiFi.mode(WIFI_STA); //station mode, we are only a client in the wifi world
     WiFi.begin(settings.ssid, settings.wifiPassword);
 //    while (WiFi.begin(settings.ssid, settings.wifiPassword) != WL_CONNECTED) 
     while (WiFi.status() != WL_CONNECTED) 
@@ -154,8 +155,8 @@ void setup()
 
 
 /**
- * Handler for incoming MQTT messages.  The payload is the command to perform. The MQTT message topic sent is the  
- * topic root plus the command.
+ * Handler for incoming MQTT messages.  The payload is the command to perform. 
+ * The MQTT message topic sent is the topic root plus the command.
  * Implemented commands are: 
  * MQTT_PAYLOAD_SETTINGS_COMMAND: sends a JSON payload of all user-specified settings
  * MQTT_PAYLOAD_REBOOT_COMMAND: Reboot the controller
