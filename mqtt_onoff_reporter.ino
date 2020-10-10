@@ -14,7 +14,7 @@
  *  factorydefaults=yes to reset all settings to factory defaults
  *  
  */
-#define VERSION "20.10.08.1"  //remember to update this after every change! YY.MM.DD.REV
+#define VERSION "20.10.09.2"  //remember to update this after every change! YY.MM.DD.REV
  
 #include <PubSubClient.h> 
 #include <ESP8266WiFi.h>
@@ -44,6 +44,8 @@ boolean lastTick=false;
 unsigned long lastPulseTime=0;
 unsigned long pulsePeriod=0; //The number of milliseconds between last two changes
 
+// These are the settings that get stored in EEPROM.  They are all in one struct which
+// makes it easier to store and retrieve from EEPROM.
 typedef struct 
   {
   unsigned int validConfig=0; 
@@ -88,7 +90,6 @@ void setup()
   EEPROM.begin(sizeof(settings)); //fire up the eeprom section of flash
   Serial.print("Settings object size=");
   Serial.println(sizeof(settings));
-
     
   commandString.reserve(200); // reserve 200 bytes of serial buffer space for incoming command string
 
@@ -119,7 +120,7 @@ void setup()
 //      Serial.println(WiFi.status());
       Serial.print(".");
       
-      // Check for input in case it needs to be changed to work
+      // Check for input in case the wifi needs to be changed to work
       if (Serial.available())
         {
         serialEvent();
@@ -143,14 +144,14 @@ void setup()
     mqttClient.setCallback(incomingMqttHandler);
     
     delay(2000);  //give wifi a chance to warm up
-    reconnect();     
+    reconnect();  // connect to the MQTT broker   
     }
     
   Serial.println("\nConfiguration is done via serial connection.  You can enter:\n");
   showSettings(); 
   lastTick=!getTick();  //to get first report after reboot
   digitalWrite(LED_BUILTIN, HIGH); //turn off the LED
-  delay(1000); //so we'll know it's ready
+  delay(1000);                     //so we'll know it's ready
   }
 
 
@@ -272,13 +273,14 @@ void showSettings()
  */
 void reconnect() 
   {
+  // Create a random client ID
+  String clientId = "ESP8266Client-";
+  clientId += String(random(0xffff), HEX);
+  
   // Loop until we're reconnected
   while (!mqttClient.connected()) 
     {
     Serial.print("Attempting MQTT connection...");
-    // Create a random client ID
-    String clientId = "ESP8266Client-";
-    clientId += String(random(0xffff), HEX);
     
     // Attempt to connect
     if (mqttClient.connect(clientId.c_str(),settings.mqttUsername,settings.mqttPassword))
@@ -304,20 +306,27 @@ void reconnect()
 
 
 /*
- * Read and return the level of the sensor pin
+ * Read and return the level of the sensor pin after debouncing
  */
 boolean getTick() 
   {
   boolean tick=digitalRead(SENSOR_PIN);
-  return tick;
+  delay(DEBOUNCE_DELAY);        
+  if (digitalRead(SENSOR_PIN)!=tick) //if not the same then it must be bouncing, read it again
+    {
+    delay(DEBOUNCE_DELAY);
+    tick=digitalRead(SENSOR_PIN); //it's sure to be stable by now
+    }
+
+  return tick; //verified
   }
 
+//Check if the level on the sensor pin has changed. If so, process the change.
 void handleTick(boolean tick)
   {
   long ts=millis();
   if (tick!=lastTick)
     {
-    delay(DEBOUNCE_DELAY);
     if (tick!=lastTick) //it hasn't changed after settling
       {
       lastTick=tick; // only process one event per tick
