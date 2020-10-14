@@ -3,6 +3,7 @@
 #define PASSWORD_SIZE 50
 #define ADDRESS_SIZE 30
 #define USERNAME_SIZE 50
+#define MQTT_CLIENTID_SIZE 25
 #define MQTT_TOPIC_SIZE 150
 #define MQTT_TOPIC_STATE "state"
 #define MQTT_TOPIC_PERIOD "period"

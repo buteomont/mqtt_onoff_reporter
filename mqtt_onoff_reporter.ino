@@ -14,7 +14,7 @@
  *  factorydefaults=yes to reset all settings to factory defaults
  *  
  */
-#define VERSION "20.10.09.2"  //remember to update this after every change! YY.MM.DD.REV
+#define VERSION "20.10.14.1"  //remember to update this after every change! YY.MM.DD.REV
  
 #include <PubSubClient.h> 
 #include <ESP8266WiFi.h>
@@ -56,6 +56,7 @@ typedef struct
   char mqttUsername[USERNAME_SIZE]="";
   char mqttPassword[PASSWORD_SIZE]="";
   char mqttTopicRoot[MQTT_TOPIC_SIZE]="";
+  char mqttClientId[MQTT_CLIENTID_SIZE]=""; //will be the same across reboots
   } conf;
 
 conf settings; //all settings in one struct makes it easier to store in EEPROM
@@ -63,6 +64,9 @@ boolean settingsAreValid=false;
 
 String commandString = "";     // a String to hold incoming commands from serial
 bool commandComplete = false;  // goes true when enter is pressed
+
+char* clientId = settings.mqttClientId;
+  
 
 void setup() 
   {
@@ -75,17 +79,17 @@ void setup()
   Serial.begin(115200);
   Serial.setTimeout(10000);
   Serial.println();
-  delay(500);
+
+  while (!Serial) 
+    {
+    ; // wait for serial port to connect. Needed for native USB port only
+    }
   Serial.println("\n******************************************************");
   Serial.print("MQTT on/off reporter version ");
   Serial.print(VERSION);
   Serial.println(" starting up...");
   Serial.println("******************************************************\n");
   
-  while (!Serial) 
-    {
-    ; // wait for serial port to connect. Needed for native USB port only
-    }
     
   EEPROM.begin(sizeof(settings)); //fire up the eeprom section of flash
   Serial.print("Settings object size=");
@@ -115,25 +119,13 @@ void setup()
 //    while (WiFi.begin(settings.ssid, settings.wifiPassword) != WL_CONNECTED) 
     while (WiFi.status() != WL_CONNECTED) 
       {
-      // failed, retry
+      // Not yet connected
 //      WiFi.printDiag(Serial);
 //      Serial.println(WiFi.status());
       Serial.print(".");
       
-      // Check for input in case the wifi needs to be changed to work
-      if (Serial.available())
-        {
-        serialEvent();
-        String cmd=getConfigCommand();
-        if (cmd.length()>0)
-          {
-          processCommand(cmd);
-          }
-        }
-      else
-        {
-        delay(2000);
-        }
+      checkForCommand(); // Check for input in case it needs to be changed to work
+      delay(2000);
       }
   
     Serial.println("Connected to network.");
@@ -264,7 +256,9 @@ void showSettings()
   Serial.print("wifipass=<wifi password> (");
   Serial.print(settings.wifiPassword);
   Serial.println(")");
-  Serial.println("\"reboot=yes\" to reboot the controller");
+  Serial.print("MQTT Client ID is ");
+  Serial.println(settings.mqttClientId);
+  Serial.println("Enter \"reboot=yes\" to reboot the controller");
   Serial.println("\n*** Use \"factorydefaults=yes\" to reset all settings ***\n");
   }
 
@@ -273,17 +267,13 @@ void showSettings()
  */
 void reconnect() 
   {
-  // Create a random client ID
-  String clientId = "ESP8266Client-";
-  clientId += String(random(0xffff), HEX);
-  
   // Loop until we're reconnected
   while (!mqttClient.connected()) 
     {
     Serial.print("Attempting MQTT connection...");
     
     // Attempt to connect
-    if (mqttClient.connect(clientId.c_str(),settings.mqttUsername,settings.mqttPassword))
+    if (mqttClient.connect(clientId,settings.mqttUsername,settings.mqttPassword))
       {
       Serial.println("connected to MQTT broker.");
 
@@ -298,7 +288,11 @@ void reconnect()
       Serial.print("failed, rc=");
       Serial.println(mqttClient.state());
       Serial.println("Will try again in 5 seconds");
+      
       // Wait 5 seconds before retrying
+      // In the meantime check for input in case something needs to be changed to make it work
+      checkForCommand(); 
+      
       delay(5000);
       }
     }
@@ -463,21 +457,14 @@ void initializeSettings()
   strcpy(settings.mqttUsername,"");
   strcpy(settings.mqttPassword,"");
   strcpy(settings.mqttTopicRoot,"");
+  strcpy(settings.mqttClientId,strcat("OnOffReporter_",String(random(0xffff), HEX).c_str()));
   }
 
 void loop() 
   {
   // serialEvent is not interrupt driven on the ESP32 for some reason. Do it here.
-  if (Serial.available())
-    {
-    serialEvent();
-    String cmd=getConfigCommand();
-    if (cmd.length()>0)
-      {
-      processCommand(cmd);
-      }
-    }
-        
+  checkForCommand();
+          
   // call loop() regularly to allow the library to send MQTT keep alives which
   // avoids being disconnected by the broker.  Don't call if not set up yet
   // because the WDT on the ESP8266 will reset the processor. Not a problem on ESP32.
@@ -492,6 +479,19 @@ void loop()
     }
   }
 
+
+void checkForCommand()
+  {
+  if (Serial.available())
+    {
+    serialEvent();
+    String cmd=getConfigCommand();
+    if (cmd.length()>0)
+      {
+      processCommand(cmd);
+      }
+    }
+  }
 
 
 /************************
@@ -541,7 +541,6 @@ void loadSettings()
     {
     settingsAreValid=true;
     Serial.println("Loaded configuration values from EEPROM");
-//    showSettings();
     }
   else
     {
@@ -559,9 +558,8 @@ boolean saveSettings()
     strlen(settings.wifiPassword)>0 &&
     strlen(settings.mqttBrokerAddress)>0 &&
     settings.mqttBrokerPort!=0 &&
-//    strlen(settings.mqttUsername)>0 &&
-//    strlen(settings.mqttPassword)>0 &&
-    strlen(settings.mqttTopicRoot)>0)
+    strlen(settings.mqttTopicRoot)>0  &&
+    strlen(settings.mqttClientId)>0)
     {
     Serial.println("Settings deemed complete");
     settings.validConfig=VALID_SETTINGS_FLAG;
@@ -572,6 +570,13 @@ boolean saveSettings()
     Serial.println("Settings still incomplete");
     settings.validConfig=0;
     settingsAreValid=false;
+    }
+    
+  //The mqttClientId is not set by the user, but we need to make sure it's set  
+  if (strlen(settings.mqttClientId)==0)
+    {
+    strcpy(settings.mqttClientId,strcat("OnOffReporter_",String(random(0xffff), HEX).c_str()));
+    Serial.println("Remember to remove the temporary code in the loadSettings() function");
     }
     
   EEPROM.put(0,settings);
